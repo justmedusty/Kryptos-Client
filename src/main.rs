@@ -2,8 +2,9 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::exit;
 use std::sync::{Arc, RwLock};
-use std::thread::spawn;
+use std::thread::{sleep, spawn};
 use std::{env, io};
+use std::time::Duration;
 
 static ERROR: i32 = 1;
 static SUCCESS: i32 = 0;
@@ -28,8 +29,6 @@ fn main() {
     let ip = &args[1];
     let port = &args[2];
 
-    let int_port = port.parse::<i32>().unwrap();
-
     let result = TcpStream::connect(format!("{}:{}", ip, port));
 
     if (result.is_ok()) {
@@ -46,6 +45,7 @@ fn main() {
 fn client_read_routine(tcp_stream: LockedStream) {
     let mut buffer = vec![0; 4096];
     loop {
+
         {
             let mut stream = tcp_stream.write().unwrap();
             stream.set_nonblocking(true).unwrap();
@@ -58,9 +58,9 @@ fn client_read_routine(tcp_stream: LockedStream) {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 Err(_) => exit(ERROR),
             };
+            buffer.clear();
         }
 
-        buffer.clear();
     }
 }
 fn client_input_routine(stream: LockedStream) {
@@ -68,21 +68,14 @@ fn client_input_routine(stream: LockedStream) {
         io::stdout().flush().unwrap();
 
         let mut line = String::new();
-
         io::stdin().read_line(&mut line).unwrap();
 
         let line = line.trim();
-
-        let mut num = 0;
-        {
-            let mut stream = stream.write().unwrap();
-
-            let mut total_sent = 0;
-
-            while total_sent < line.len() {
-                num = stream.write(line.as_bytes()).unwrap();
-                total_sent += num;
-            }
+        if line.is_empty() {
+            continue;
         }
+
+        let mut stream = stream.write().unwrap();
+        stream.write_all(line.as_bytes()).unwrap();
     }
 }
