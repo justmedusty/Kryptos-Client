@@ -40,7 +40,7 @@ fn main() {
             client_read_routine(Arc::clone(&wrapped_stream));
         });
 
-        client_read_routine(read_reference);
+        client_input_routine(read_reference);
 
     }
 }
@@ -50,7 +50,11 @@ fn client_read_routine(tcp_stream: LockedStream) {
         {
             let mut stream = tcp_stream.write().unwrap();
             stream.set_nonblocking(true).unwrap();
-            stream.read_to_string(&mut buffer).unwrap();
+            match stream.read_to_string(&mut buffer) {
+                Ok(x) => x,
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+                Err(_) => exit(ERROR),
+            };
             println!("{}", buffer);
         }
         buffer.clear();
