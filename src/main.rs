@@ -45,22 +45,25 @@ fn main() {
     }
 }
 fn client_read_routine(tcp_stream: LockedStream) {
-    let mut buffer = vec![0;4096];
+    let mut buffer = vec![0; 4096];
     loop {
+
         {
             let mut stream = tcp_stream.write().unwrap();
             stream.set_nonblocking(true).unwrap();
             match stream.read(&mut buffer) {
                 Ok(0) => continue,
                 Ok(n) => {
-                    let data = String::from_utf8_lossy(&buffer[..n]);
+                    let data = String::from_utf8_lossy(&buffer);
                     println!("{}", data);
-                },
+                }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 Err(_) => exit(ERROR),
             };
         }
+
         buffer.clear();
+
     }
 }
 fn client_input_routine(stream: LockedStream) {
@@ -75,7 +78,13 @@ fn client_input_routine(stream: LockedStream) {
 
         {
             let mut stream = stream.write().unwrap();
-            stream.write(line.as_bytes()).unwrap();
+
+            let mut total_sent = 0;
+
+            while total_sent < line.len() {
+                total_sent +=  stream.write(line.as_bytes()).unwrap();
+            }
+
         }
     }
 }
