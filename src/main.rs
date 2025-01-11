@@ -2,9 +2,8 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::exit;
 use std::sync::{Arc, RwLock};
-use std::thread::{sleep, spawn};
+use std::thread::spawn;
 use std::{env, io};
-use std::time::Duration;
 
 static ERROR: i32 = 1;
 static SUCCESS: i32 = 0;
@@ -47,7 +46,6 @@ fn main() {
 fn client_read_routine(tcp_stream: LockedStream) {
     let mut buffer = vec![0; 4096];
     loop {
-
         {
             let mut stream = tcp_stream.write().unwrap();
             stream.set_nonblocking(true).unwrap();
@@ -63,7 +61,6 @@ fn client_read_routine(tcp_stream: LockedStream) {
         }
 
         buffer.clear();
-
     }
 }
 fn client_input_routine(stream: LockedStream) {
@@ -76,15 +73,16 @@ fn client_input_routine(stream: LockedStream) {
 
         let line = line.trim();
 
+        let mut num = 0;
         {
             let mut stream = stream.write().unwrap();
 
             let mut total_sent = 0;
 
             while total_sent < line.len() {
-                total_sent +=  stream.write(line.as_bytes()).unwrap();
+                num = stream.write(line.as_bytes()).unwrap();
+                total_sent += num;
             }
-
         }
     }
 }
