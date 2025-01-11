@@ -2,8 +2,9 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::exit;
 use std::sync::{Arc, RwLock};
+use std::thread::{sleep, spawn};
 use std::{env, io};
-use std::thread::spawn;
+use std::time::Duration;
 
 static ERROR: i32 = 1;
 static SUCCESS: i32 = 0;
@@ -32,7 +33,7 @@ fn main() {
 
     let result = TcpStream::connect(format!("{}:{}", ip, port));
 
-    if(result.is_ok()) {
+    if (result.is_ok()) {
         let mut stream = result.unwrap();
         let wrapped_stream = Arc::new(RwLock::new(stream));
         let read_reference = Arc::clone(&wrapped_stream);
@@ -41,28 +42,29 @@ fn main() {
         });
 
         client_input_routine(read_reference);
-
     }
 }
 fn client_read_routine(tcp_stream: LockedStream) {
+    let mut buffer = vec![0;4096];
     loop {
-        let mut buffer = String::new();
         {
             let mut stream = tcp_stream.write().unwrap();
             stream.set_nonblocking(true).unwrap();
-            match stream.read_to_string(&mut buffer) {
-                Ok(x) => x,
+            match stream.read(&mut buffer) {
+                Ok(0) => continue,
+                Ok(n) => {
+                    let data = String::from_utf8_lossy(&buffer[..n]);
+                    println!("{}", data);
+                },
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 Err(_) => exit(ERROR),
             };
-            println!("{}", buffer);
         }
         buffer.clear();
     }
 }
 fn client_input_routine(stream: LockedStream) {
     loop {
-        print!("> ");
         io::stdout().flush().unwrap();
 
         let mut line = String::new();
@@ -70,10 +72,6 @@ fn client_input_routine(stream: LockedStream) {
         io::stdin().read_line(&mut line).unwrap();
 
         let line = line.trim();
-
-        if line == "exit" {
-            exit(0);
-        }
 
         {
             let mut stream = stream.write().unwrap();
