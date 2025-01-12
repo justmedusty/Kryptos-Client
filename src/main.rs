@@ -11,25 +11,36 @@ type LockedStream = Arc<RwLock<TcpStream>>;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if (args.len() < 3) {
-        println!("Usage : telnet server_ip port");
-        exit(ERROR);
-    }
 
     if(args.len() > 3){
         println!("Too many arguments!");
         println!("Usage : telnet server_ip port");
         println!("Try --help for help.");
+        exit(ERROR);
     }
-    if (args[0] == "--help") {
+
+    if  {args.len() < 2 }{
         println!("Usage : telnet server_ip port");
+        println!("Try --help for help.");
+        exit(ERROR);
+    }
+    if (args[1] == "--help") {
+        println!("Usage : telnet server_ip port");
+        println!("This is a very simple telnet server client written in Rust.");
+        println!("There is a multiplexing multithreaded server to pair on my github if would like to play around with it.");
         println!("Options: --help, --version");
         exit(SUCCESS);
     }
 
-    if (args[0] == "--version") {
+    if (args[1] == "--version") {
         println!("telnet client version {}", env!("CARGO_PKG_VERSION"));
         exit(SUCCESS);
+    }
+
+    if  {args.len() < 3 }{
+        println!("Usage : telnet server_ip port");
+        println!("Try --help for help.");
+        exit(ERROR);
     }
 
     let ip = &args[1];
