@@ -2,9 +2,8 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::exit;
 use std::sync::{Arc, RwLock};
-use std::thread::{sleep, spawn};
+use std::thread::spawn;
 use std::{env, io};
-use std::time::Duration;
 
 static ERROR: i32 = 1;
 static SUCCESS: i32 = 0;
@@ -16,14 +15,21 @@ fn main() {
         println!("Usage : telnet server_ip port");
         exit(ERROR);
     }
+
+    if(args.len() > 3){
+        println!("Too many arguments!");
+        println!("Usage : telnet server_ip port");
+        println!("Try --help for help.");
+    }
     if (args[0] == "--help") {
         println!("Usage : telnet server_ip port");
-        exit(ERROR);
+        println!("Options: --help, --version");
+        exit(SUCCESS);
     }
 
     if (args[0] == "--version") {
         println!("telnet client version {}", env!("CARGO_PKG_VERSION"));
-        exit(ERROR);
+        exit(SUCCESS);
     }
 
     let ip = &args[1];
@@ -32,7 +38,13 @@ fn main() {
     let result = TcpStream::connect(format!("{}:{}", ip, port));
 
     if (result.is_ok()) {
-        let mut stream = result.unwrap();
+        let mut stream = match result {
+            Ok(x) => x,
+            Err(_) => {
+                println!("Error unwrapping result");
+                exit(ERROR);
+            }
+        };
         let wrapped_stream = Arc::new(RwLock::new(stream));
         let read_reference = Arc::clone(&wrapped_stream);
         spawn(move || {
@@ -43,39 +55,81 @@ fn main() {
     }
 }
 fn client_read_routine(tcp_stream: LockedStream) {
-    let mut buffer = vec![0; 4096];
     loop {
-
+        let mut buffer = vec![0; 1024];
         {
-            let mut stream = tcp_stream.write().unwrap();
-            stream.set_nonblocking(true).unwrap();
+            let mut stream = match tcp_stream.write() {
+                Ok(x) => x,
+                Err(_) => {
+                    println!("TCP stream lock acquisition failed\n");
+                    exit(ERROR);
+                }
+            };
+            match stream.set_nonblocking(true) {
+                Ok(x) => x,
+                Err(_) => {
+                    println!("Setting socket to non blocking failed\n");
+                    exit(ERROR);
+                }
+            };
             match stream.read(&mut buffer) {
                 Ok(0) => continue,
                 Ok(n) => {
+                    buffer.truncate(n);
                     let data = String::from_utf8_lossy(&buffer);
-                    println!("{}", data);
+                    println!("Received: {}", data);
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
                 Err(_) => exit(ERROR),
             };
-            buffer.clear();
+            match io::stdout().flush() {
+                Ok(x) => x,
+                Err(_) => {
+                    println!("Failed to flush stdout");
+                    exit(ERROR);
+                }
+            };
         }
-
     }
 }
 fn client_input_routine(stream: LockedStream) {
     loop {
-        io::stdout().flush().unwrap();
+        match io::stdout().flush() {
+            Ok(x) => x,
+            Err(_) => {
+                println!("Failed to flush stdout");
+                exit(ERROR);
+            }
+        };
 
         let mut line = String::new();
-        io::stdin().read_line(&mut line).unwrap();
+
+        match io::stdin().read_line(&mut line) {
+            Ok(x) => x,
+            Err(_) => {
+                println!("read_line triggered error");
+                exit(ERROR);
+            }
+        };
 
         let line = line.trim();
         if line.is_empty() {
             continue;
         }
 
-        let mut stream = stream.write().unwrap();
-        stream.write_all(line.as_bytes()).unwrap();
+        let mut stream = match stream.write() {
+            Ok(x) => x,
+            Err(_) => {
+                println!("Acquiring write lock on stream failed");
+                exit(ERROR);
+            }
+        };
+        match stream.write_all(line.as_bytes()) {
+            Ok(x) => x,
+            Err(_) => {
+                println!("Failed to write line to stream");
+                exit(ERROR);
+            }
+        };
     }
 }
