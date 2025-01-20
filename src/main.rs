@@ -1,7 +1,10 @@
+mod rc4;
+
+use crate::rc4::rc4::{Rc4State, KEY_SIZE_BYTES};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::exit;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{sleep, spawn};
 use std::time::Duration;
 use std::{env, io};
@@ -9,24 +12,25 @@ use std::{env, io};
 static ERROR: i32 = 1;
 static SUCCESS: i32 = 0;
 type LockedStream = Arc<RwLock<TcpStream>>;
+type Rc4StateMachine = Arc<Mutex<Rc4State>>;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if (args.len() > 3) {
+    if (args.len() > 4) {
         println!("Too many arguments!");
-        println!("Usage : telnet server_ip port");
+        println!("Usage : telnet server_ip port session_key");
         println!("Try --help for help.");
         exit(ERROR);
     }
 
-    if { args.len() < 2 } {
-        println!("Usage : telnet server_ip port");
+    if { args.len() < 3 } {
+        println!("Usage : telnet server_ip port session_key");
         println!("Try --help for help.");
         exit(ERROR);
     }
     if (args[1] == "--help") {
-        println!("Usage : telnet server_ip port");
+        println!("Usage : telnet server_ip port session_key");
         println!("This is a very simple telnet server client written in Rust.");
         println!("There is a multithreaded server to pair on my github if would like to play around with it.");
         println!("Options: --help, --version");
@@ -39,14 +43,21 @@ fn main() {
     }
 
     if { args.len() < 3 } {
-        println!("Usage : telnet server_ip port");
+        println!("Usage : telnet server_ip port session_key");
         println!("Try --help for help.");
         exit(ERROR);
     }
 
     let ip = &args[1];
     let port = &args[2];
+    let session_key = args[3].clone();
 
+    if session_key.len() != KEY_SIZE_BYTES {
+        eprintln!("Invalid session key! Must be of length {KEY_SIZE_BYTES}. ASk the server administrator for the session key.");
+        exit(ERROR);
+    }
+
+    let rc4 = Arc::new(Mutex::new(Rc4State::new()));
     let result = TcpStream::connect(format!("{}:{}", ip, port));
 
     if (result.is_ok()) {
@@ -59,14 +70,15 @@ fn main() {
         };
         let wrapped_stream = Arc::new(RwLock::new(stream));
         let read_reference = Arc::clone(&wrapped_stream);
+        let rc4_clone = rc4.clone();
         spawn(move || {
-            client_read_routine(Arc::clone(&wrapped_stream));
+            client_read_routine(Arc::clone(&wrapped_stream), rc4_clone);
         });
 
-        client_input_routine(read_reference);
+        client_input_routine(read_reference, rc4);
     }
 }
-fn client_read_routine(tcp_stream: LockedStream) {
+fn client_read_routine(tcp_stream: LockedStream, rc4: Rc4StateMachine) {
     loop {
         let mut buffer = vec![0; 1024];
         sleep(Duration::from_millis(25));
@@ -91,7 +103,15 @@ fn client_read_routine(tcp_stream: LockedStream) {
                     continue;
                 }
                 Ok(_n) => {
-                    let data = String::from_utf8_lossy(&buffer);
+                    let mut decrypted_buffer = buffer.clone();
+                    {
+                        let mut rc4_stream = match rc4.lock() {
+                            Ok(x) => x,
+                            Err(_) => continue,
+                        };
+                        rc4_stream.decrypt(&buffer, &mut decrypted_buffer);
+                    }
+                    let data = String::from_utf8_lossy(&decrypted_buffer);
                     if data.len() > 0 {
                         print!("{}", data);
                     }
@@ -107,7 +127,7 @@ fn client_read_routine(tcp_stream: LockedStream) {
         io::stdout().flush().unwrap();
     }
 }
-fn client_input_routine(stream: LockedStream) {
+fn client_input_routine(stream: LockedStream, rc4: Rc4StateMachine) {
     loop {
         let mut line = String::new();
 
@@ -123,7 +143,13 @@ fn client_input_routine(stream: LockedStream) {
         if line.is_empty() {
             continue;
         }
+        let mut encrypted_buffer = vec![0; 4096];
+        encrypted_buffer.truncate(line.len());
 
+        {
+            let mut rc4_unlocked = rc4.lock().unwrap();
+            rc4_unlocked.encrypt(line.as_bytes(),&mut encrypted_buffer);
+        }
         {
             let mut stream = match stream.write() {
                 Ok(x) => x,
@@ -132,7 +158,6 @@ fn client_input_routine(stream: LockedStream) {
                     exit(ERROR);
                 }
             };
-
 
             match stream.write_all(line.as_bytes()) {
                 Ok(x) => x,
