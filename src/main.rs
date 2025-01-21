@@ -42,7 +42,7 @@ fn main() {
         exit(SUCCESS);
     }
 
-    if { args.len() < 3 } {
+    if { args.len() < 4 } {
         println!("Usage : telnet server_ip port session_key");
         println!("Try --help for help.");
         exit(ERROR);
@@ -50,14 +50,16 @@ fn main() {
 
     let ip = &args[1];
     let port = &args[2];
-    let session_key = args[3].clone();
+    let session_key = args[3].as_bytes().to_owned();
 
     if session_key.len() != KEY_SIZE_BYTES {
         eprintln!("Invalid session key! Must be of length {KEY_SIZE_BYTES}. ASk the server administrator for the session key.");
         exit(ERROR);
     }
+    let mut rc4_state = Rc4State::new();
 
-    let rc4 = Arc::new(Mutex::new(Rc4State::new()));
+    rc4_state.set_key(&session_key);
+    let rc4 = Arc::new(Mutex::new(rc4_state));
     let result = TcpStream::connect(format!("{}:{}", ip, port));
 
     if (result.is_ok()) {
@@ -104,13 +106,14 @@ fn client_read_routine(tcp_stream: LockedStream, rc4: Rc4StateMachine) {
                 }
                 Ok(_n) => {
                     let mut decrypted_buffer = buffer.clone();
-                    {
-                        let mut rc4_stream = match rc4.lock() {
-                            Ok(x) => x,
-                            Err(_) => continue,
-                        };
-                        rc4_stream.decrypt(&buffer, &mut decrypted_buffer);
-                    }
+
+                    let mut rc4_stream = match rc4.lock() {
+                        Ok(x) => x,
+                        Err(_) => continue,
+                    };
+                    rc4_stream.decrypt(&buffer, &mut decrypted_buffer);
+                    drop(rc4_stream);
+                    decrypted_buffer.resize(_n, 0);
                     let data = String::from_utf8_lossy(&decrypted_buffer);
                     if data.len() > 0 {
                         print!("{}", data);
@@ -146,27 +149,26 @@ fn client_input_routine(stream: LockedStream, rc4: Rc4StateMachine) {
         let mut encrypted_buffer = vec![0; 4096];
         encrypted_buffer.truncate(line.len());
 
-        {
-            let mut rc4_unlocked = rc4.lock().unwrap();
-            rc4_unlocked.encrypt(line.as_bytes(),&mut encrypted_buffer);
-        }
-        {
-            let mut stream = match stream.write() {
-                Ok(x) => x,
-                Err(_) => {
-                    println!("Acquiring write lock on stream failed");
-                    exit(ERROR);
-                }
-            };
+        let mut rc4_unlocked = rc4.lock().unwrap();
+        rc4_unlocked.encrypt(line.as_bytes(), &mut encrypted_buffer);
+        drop(rc4_unlocked);
 
-            match stream.write_all(line.as_bytes()) {
-                Ok(x) => x,
-                Err(_) => {
-                    println!("Failed to write line to stream");
-                    exit(ERROR);
-                }
-            };
-        }
+        let mut stream = match stream.write() {
+            Ok(x) => x,
+            Err(_) => {
+                println!("Acquiring write lock on stream failed");
+                exit(ERROR);
+            }
+        };
+        encrypted_buffer.resize(line.len(), 0);
+        match stream.write_all(encrypted_buffer.as_slice()) {
+            Ok(x) => x,
+            Err(_) => {
+                println!("Failed to write line to stream");
+                exit(ERROR);
+            }
+        };
+        drop(stream);
 
         sleep(Duration::from_millis(25));
     }

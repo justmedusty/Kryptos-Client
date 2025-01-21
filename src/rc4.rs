@@ -1,5 +1,6 @@
 pub mod rc4 {
     use rand::RngCore;
+
     pub const KEY_SIZE_BYTES: usize = 256;
 
     #[derive(Debug)]
