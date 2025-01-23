@@ -84,48 +84,48 @@ fn client_read_routine(tcp_stream: LockedStream, rc4: Rc4StateMachine) {
     loop {
         let mut buffer = vec![0; 1024];
         sleep(Duration::from_millis(25));
-        {
-            let mut stream = match tcp_stream.write() {
-                Ok(x) => x,
-                Err(_) => {
-                    println!("TCP stream lock acquisition failed\n");
-                    exit(ERROR);
-                }
-            };
-            match stream.set_nonblocking(true) {
-                Ok(x) => x,
-                Err(_) => {
-                    println!("Setting socket to non blocking failed\n");
-                    exit(ERROR);
-                }
-            };
 
-            match stream.read(&mut buffer) {
-                Ok(0) => {
-                    continue;
-                }
-                Ok(_n) => {
-                    let mut decrypted_buffer = buffer.clone();
+        let mut stream = match tcp_stream.write() {
+            Ok(x) => x,
+            Err(_) => {
+                println!("TCP stream lock acquisition failed\n");
+                exit(ERROR);
+            }
+        };
+        match stream.set_nonblocking(true) {
+            Ok(x) => x,
+            Err(_) => {
+                println!("Setting socket to non blocking failed\n");
+                exit(ERROR);
+            }
+        };
 
-                    let mut rc4_stream = match rc4.lock() {
-                        Ok(x) => x,
-                        Err(_) => continue,
-                    };
-                    rc4_stream.decrypt(&buffer, &mut decrypted_buffer);
-                    drop(rc4_stream);
-                    decrypted_buffer.resize(_n, 0);
-                    let data = String::from_utf8_lossy(&decrypted_buffer);
-                    if data.len() > 0 {
-                        print!("{}", data);
-                    }
-                    for mut byte in buffer {
-                        byte = 0;
-                    }
+        match stream.read(&mut buffer) {
+            Ok(0) => {
+                continue;
+            }
+            Ok(_n) => {
+                let mut decrypted_buffer = buffer.clone();
+
+                let mut rc4_stream = match rc4.lock() {
+                    Ok(x) => x,
+                    Err(_) => continue,
+                };
+                rc4_stream.decrypt(&buffer, &mut decrypted_buffer);
+                drop(rc4_stream);
+                decrypted_buffer.resize(_n, 0);
+                let data = String::from_utf8_lossy(&decrypted_buffer);
+                if data.len() > 0 {
+                    print!("{}", data);
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
-                Err(_) => exit(ERROR),
-            };
-        }
+                for mut byte in buffer {
+                    byte = 0;
+                }
+            }
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
+            Err(_) => exit(ERROR),
+        };
+        drop(stream);
 
         io::stdout().flush().unwrap();
     }
