@@ -53,7 +53,7 @@ fn main() {
     let session_key = args[3].as_bytes().to_owned();
 
     if session_key.len() != KEY_SIZE_BYTES {
-        eprintln!("Invalid session key! Must be of length {KEY_SIZE_BYTES}. ASk the server administrator for the session key.");
+        eprintln!("Invalid session key! Must be of length {KEY_SIZE_BYTES}. Ask the server administrator for the session key.");
         exit(ERROR);
     }
     let mut rc4_state = Rc4State::new();
@@ -102,7 +102,8 @@ fn client_read_routine(tcp_stream: LockedStream, rc4: Rc4StateMachine) {
 
         match stream.read(&mut buffer) {
             Ok(0) => {
-                continue;
+                eprintln!("Remote server has closed the connection\n");
+                exit(ERROR);
             }
             Ok(_n) => {
                 let mut decrypted_buffer = buffer.clone();
