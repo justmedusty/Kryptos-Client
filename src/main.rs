@@ -112,25 +112,44 @@ fn client_read_routine(tcp_stream: LockedStream, rc4: Rc4StateMachine) {
                     Ok(x) => x,
                     Err(_) => continue,
                 };
+
+                /*
+                   Drop the rc4 stream after decrypting so that the other thread can acquire the lock when it needs
+                   to
+                */
                 rc4_stream.decrypt(&buffer, &mut decrypted_buffer);
                 drop(rc4_stream);
+
+                //Resize the buffer so that we don't print any junk in the rest of the buffer
                 decrypted_buffer.resize(_n, 0);
+
                 let data = String::from_utf8_lossy(&decrypted_buffer);
-                if data.len() > 0 {
-                    print!("{}", data);
-                }
-                for mut byte in buffer {
-                    byte = 0;
+
+                /*
+                   Print the data that we read on the socket and 0 the buffer up until the point we just read to
+                   We do this to avoid iterating the entire buffer every time
+                */
+                print!("{}", data);
+
+                for mut byte in buffer[.._n].iter_mut() {
+                    *byte = 0;
                 }
             }
+            //Since we require non blocking reads due to the lock scheme, just continue the loop, dropping the lock
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
             Err(_) => exit(ERROR),
         };
-        drop(stream);
 
+        drop(stream);
         io::stdout().flush().unwrap();
     }
 }
+
+/*
+   As per the explicit drops due to the nature of both threads requiring access we need to manually drop (or use scope blocks but
+   manual drops are more explicit which is good) everything once we're done,otherwise locks would be held longer than is
+   absolutely necessary
+*/
 fn client_input_routine(stream: LockedStream, rc4: Rc4StateMachine) {
     loop {
         let mut line = String::new();
@@ -144,6 +163,7 @@ fn client_input_routine(stream: LockedStream, rc4: Rc4StateMachine) {
         };
 
         let line = line.trim();
+
         if line.is_empty() {
             continue;
         }
@@ -161,7 +181,9 @@ fn client_input_routine(stream: LockedStream, rc4: Rc4StateMachine) {
                 exit(ERROR);
             }
         };
+
         encrypted_buffer.resize(line.len(), 0);
+
         match stream.write_all(encrypted_buffer.as_slice()) {
             Ok(x) => x,
             Err(_) => {
@@ -170,7 +192,5 @@ fn client_input_routine(stream: LockedStream, rc4: Rc4StateMachine) {
             }
         };
         drop(stream);
-
-        sleep(Duration::from_millis(25));
     }
 }
