@@ -53,6 +53,7 @@ fn main() {
     let session_key = args[3].as_bytes().to_owned();
 
     if session_key.len() != KEY_SIZE_BYTES {
+        println!("{}",session_key.len());
         eprintln!("Invalid session key! Must be of length {KEY_SIZE_BYTES}. Ask the server administrator for the session key.");
         exit(ERROR);
     }
