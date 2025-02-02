@@ -1,6 +1,6 @@
-mod rc4;
+mod cryptography;
 
-use crate::rc4::rc4::{Rc4State, KEY_SIZE_BYTES};
+use crate::cryptography::rc4::{Rc4State, KEY_SIZE_BYTES};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::exit;
@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{sleep, spawn};
 use std::time::Duration;
 use std::{env, io};
+use crate::cryptography::cryptography::EncryptionContext;
 
 static ERROR: i32 = 1;
 static SUCCESS: i32 = 0;
@@ -57,10 +58,10 @@ fn main() {
         eprintln!("Invalid session key! Must be of length {KEY_SIZE_BYTES}. Ask the server administrator for the session key.");
         exit(ERROR);
     }
-    let mut rc4_state = Rc4State::new();
+    let mut state = EncryptionContext::new(Rc4State::new());
 
-    rc4_state.set_key(&session_key);
-    let rc4 = Arc::new(Mutex::new(rc4_state));
+    state.context.set_key(&session_key);
+    let rc4 = Arc::new(Mutex::new(state));
     let result = TcpStream::connect(format!("{}:{}", ip, port));
 
     if (result.is_ok()) {
@@ -81,7 +82,7 @@ fn main() {
         client_input_routine(read_reference, rc4);
     }
 }
-fn client_read_routine(tcp_stream: LockedStream, rc4: Rc4StateMachine) {
+fn client_read_routine(tcp_stream: LockedStream, rc4: Arc<Mutex<EncryptionContext>>) {
     loop {
         let mut buffer = vec![0; 1024];
         sleep(Duration::from_millis(25));
@@ -118,7 +119,7 @@ fn client_read_routine(tcp_stream: LockedStream, rc4: Rc4StateMachine) {
                    Drop the rc4 stream after decrypting so that the other thread can acquire the lock when it needs
                    to
                 */
-                rc4_stream.decrypt(&buffer, &mut decrypted_buffer);
+                rc4_stream.context.decrypt(&buffer, &mut decrypted_buffer);
                 drop(rc4_stream);
 
                 //Resize the buffer so that we don't print any junk in the rest of the buffer
@@ -151,7 +152,7 @@ fn client_read_routine(tcp_stream: LockedStream, rc4: Rc4StateMachine) {
    manual drops are more explicit which is good) everything once we're done,otherwise locks would be held longer than is
    absolutely necessary
 */
-fn client_input_routine(stream: LockedStream, rc4: Rc4StateMachine) {
+fn client_input_routine(stream: LockedStream, rc4: Arc<Mutex<EncryptionContext>>) {
     loop {
         let mut line = String::new();
 
@@ -172,7 +173,7 @@ fn client_input_routine(stream: LockedStream, rc4: Rc4StateMachine) {
         encrypted_buffer.truncate(line.len());
 
         let mut rc4_unlocked = rc4.lock().unwrap();
-        rc4_unlocked.encrypt(line.as_bytes(), &mut encrypted_buffer);
+        rc4_unlocked.context.encrypt(&line.as_bytes().to_vec(), &mut encrypted_buffer);
         drop(rc4_unlocked);
 
         let mut stream = match stream.write() {
