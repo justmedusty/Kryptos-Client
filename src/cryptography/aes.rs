@@ -736,7 +736,17 @@ impl Encryption for AESContext {
         self.initialize_context();
     }
 
-    fn encrypt(&mut self, input: &Vec<u8>, output: &mut Vec<u8>) {
+    fn encrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
+        let input_cap = input.len();
+        /*
+           Ensure input is block size aligned
+        */
+        if (input_cap % AES_BLOCK_LENGTH_BYTES != 0) {
+            let diff = (input_cap + AES_BLOCK_LENGTH_BYTES) % AES_BLOCK_LENGTH_BYTES;
+            for _ in 0..(AES_BLOCK_LENGTH_BYTES - diff) {
+                input.push(0);
+            }
+        }
         match self.mode {
             AesMode::CBC => {
                 self.cbc_encrypt(input, output);
@@ -750,7 +760,7 @@ impl Encryption for AESContext {
         }
     }
 
-    fn decrypt(&mut self, input: &Vec<u8>, output: &mut Vec<u8>) {
+    fn decrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
         let input_size = input.len();
         let output_size = output.len();
 

@@ -119,7 +119,7 @@ fn client_read_routine(tcp_stream: LockedStream, rc4: Arc<Mutex<EncryptionContex
                    Drop the rc4 stream after decrypting so that the other thread can acquire the lock when it needs
                    to
                 */
-                rc4_stream.context.decrypt(&buffer, &mut decrypted_buffer);
+                rc4_stream.context.decrypt(&mut buffer, &mut decrypted_buffer);
                 drop(rc4_stream);
 
                 //Resize the buffer so that we don't print any junk in the rest of the buffer
@@ -173,7 +173,7 @@ fn client_input_routine(stream: LockedStream, rc4: Arc<Mutex<EncryptionContext>>
         encrypted_buffer.truncate(line.len());
 
         let mut rc4_unlocked = rc4.lock().unwrap();
-        rc4_unlocked.context.encrypt(&line.as_bytes().to_vec(), &mut encrypted_buffer);
+        rc4_unlocked.context.encrypt(&mut line.as_bytes().to_vec(), &mut encrypted_buffer);
         drop(rc4_unlocked);
 
         let mut stream = match stream.write() {

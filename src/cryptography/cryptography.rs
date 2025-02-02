@@ -2,8 +2,13 @@ use std::fmt;
 
 pub trait Encryption {
     fn initialize_context(&mut self);
-    fn encrypt(&mut self, input:  &Vec<u8>, output : &mut Vec<u8>);
-    fn decrypt(&mut self, input:  &Vec<u8>, output: &mut Vec<u8>);
+
+    /*
+        Changing all references to mutable because in some cases you might need to resize the input buffer
+        if it doesn't align with a certain block size alignment
+     */
+    fn encrypt(&mut self, input:  &mut Vec<u8>, output : &mut Vec<u8>);
+    fn decrypt(&mut self, input:  &mut Vec<u8>, output: &mut Vec<u8>);
     fn set_key(&mut self, key: &[u8]);
 }
 

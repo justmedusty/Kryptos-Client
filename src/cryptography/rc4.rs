@@ -86,7 +86,7 @@ impl Encryption for Rc4State {
         self.initialize();
     }
 
-    fn encrypt(&mut self, input: &Vec<u8>, output: &mut Vec<u8>) {
+    fn encrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
         let mut keystream = vec![0u8; input.len()];
 
         if output.len() < input.len() {
@@ -101,7 +101,7 @@ impl Encryption for Rc4State {
         }
     }
 
-    fn decrypt(&mut self, input: &Vec<u8>, output:  &mut Vec<u8>) {
+    fn decrypt(&mut self, input: &mut Vec<u8>, output:  &mut Vec<u8>) {
         self.encrypt(input, output);
     }
 
