@@ -1,1 +1,1 @@
-Part of the NyxChat code base just a client
+Part of the Kryptos code base just a client
