@@ -49,7 +49,7 @@ pub mod arg_handling {
 
     pub fn parse_arguments(args: Vec<String>) -> KryptosConfig {
         let use_key: bool = args.len() == 5;
-        if (args.len() > 6) {
+        if (args.len() > 5) {
             println!("Too many arguments!");
             println!("Usage: kryptos-client ip port encryption-type key");
             println!("Try --help for help.");
@@ -96,7 +96,7 @@ pub mod arg_handling {
             }
         };
 
-        let encryption_type = match args[2].as_str() {
+        let encryption_type = match args[3].as_str() {
             "AesCbc" => EncryptionInfo::AesCbc,
             "AesCtr" => EncryptionInfo::AesCtr,
             "AesEcb" => EncryptionInfo::AesEcb,
@@ -107,11 +107,11 @@ pub mod arg_handling {
                 exit(ERROR);
             }
         };
-        let key = args[5].to_string();
+        let key = args[4].to_string();
 
         let actual_size = key.len();
 
-        if (key.len() * 8 != 128 || key.len() * 8 != 192 || key.len() * 8 != 256) {
+        if ((key.len()) * 8 != 128 && (key.len()) * 8 != 192 && (key.len() * 8) != 256) {
             eprintln!("Invalid key!");
             eprintln!(
                 "Valid key sizes are 128, 192, 256! The provided key was of length {}.",

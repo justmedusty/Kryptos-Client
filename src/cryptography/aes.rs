@@ -526,7 +526,7 @@ impl AESContext {
         /*
            Resize if required to store the 16 byte IV as a prefix to the rest of the data
         */
-        if (output_len - AES_BLOCK_LENGTH_BYTES as i64) < input_len {
+        if (output_len - AES_BLOCK_LENGTH_BYTES as i64) < input_len || output_len < 16{
             output.resize(input_len as usize + AES_BLOCK_LENGTH_BYTES, 0);
         }
 
