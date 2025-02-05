@@ -521,7 +521,7 @@ impl AESContext {
            Casting these just in case it goes negative on the subtraction operation, don't want wraparound or panic because of this
         */
         let input_len: i64 = buffer.len() as i64;
-        let output_len: i64 = output.capacity() as i64;
+        let output_len: i64 = output.len() as i64;
 
         /*
            Resize if required to store the 16 byte IV as a prefix to the rest of the data
