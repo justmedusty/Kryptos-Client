@@ -24,7 +24,7 @@ impl Rc4Key {
 
 impl Rc4State {
     /// Creates a new Rc4State object with a randomly generated key and default values for the s array, i, j
-    pub fn new() -> Self {
+    pub fn new(key: Option<&[u8]>) -> Self {
         let mut new = Self {
             s: [0; KEY_SIZE_BYTES],
             i: 0,
@@ -32,6 +32,10 @@ impl Rc4State {
             key: Rc4Key::new([0; KEY_SIZE_BYTES]), // Initialize with a default key
         };
 
+        if(key.is_some()) {
+            let key = key.unwrap();
+            new.set_key(key);
+        }
         new.initialize();
         new
     }
