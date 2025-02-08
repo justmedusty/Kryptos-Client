@@ -107,7 +107,7 @@ pub mod arg_handling {
                 exit(ERROR);
             }
         };
-        let key = args[4].to_string();
+        let key = args[4].trim().to_string();
 
         let actual_size = key.len();
 

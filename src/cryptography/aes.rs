@@ -729,19 +729,40 @@ impl AESContext {
     }
 }
 
+impl PartialEq for AesMode {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            AesMode::CBC => match other {
+                AesMode::CBC => true,
+                _ => false,
+            },
+            AesMode::ECB => match other {
+                AesMode::ECB => true,
+                _ => false,
+            },
+            AesMode::CTR => match other {
+                AesMode::CTR => true,
+                _ => false,
+            },
+        }
+    }
+}
+
 impl Encryption for AESContext {
     fn initialize_context(&mut self) {
         self.initialize_context();
     }
 
     fn encrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
-        let len = input.len();
-        let padding_len = AES_BLOCK_LENGTH_BYTES - (len % AES_BLOCK_LENGTH_BYTES);
+        let ctr: bool = self.mode == AesMode::CTR;
+        if (!ctr) {
+            let len = input.len();
+            let padding_len = AES_BLOCK_LENGTH_BYTES - (len % AES_BLOCK_LENGTH_BYTES);
 
-        for _ in 0..padding_len {
-            input.push(padding_len as u8);
+            for _ in 0..padding_len {
+                input.push(padding_len as u8);
+            }
         }
-
         match self.mode {
             AesMode::CBC => {
                 self.cbc_encrypt(input, output);
@@ -756,6 +777,7 @@ impl Encryption for AESContext {
     }
 
     fn decrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
+        let ctr: bool = self.mode == AesMode::CTR;
         let input_size = input.len();
         let output_size = output.len();
 
@@ -773,17 +795,20 @@ impl Encryption for AESContext {
                 self.ctr_decrypt(input, output);
             }
         }
-
-        let len = output.len();
-
-        if let Some(&last_byte) = input.last() {
-            let pad_len = last_byte as usize;
-            if pad_len <= AES_BLOCK_LENGTH_BYTES && input[len - pad_len..].iter().all(|&b| b == last_byte) {
-                input.truncate(len - pad_len);
+        if (ctr == false) {
+            if let Some(&last_byte) = output.last() {
+                let pad_len = last_byte as usize;
+                if pad_len > 0 && pad_len <= AES_BLOCK_LENGTH_BYTES && output.len() >= pad_len {
+                    let padding_valid = output[output.len() - pad_len..]
+                        .iter()
+                        .all(|&b| b == last_byte);
+                    if padding_valid {
+                        output.truncate(output.len() - pad_len);
+                    }
+                }
             }
         }
     }
-
 
     fn set_key(&mut self, key: &[u8]) {
         for (index, byte) in key.iter().enumerate() {
