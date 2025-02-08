@@ -526,7 +526,7 @@ impl AESContext {
         /*
            Resize if required to store the 16 byte IV as a prefix to the rest of the data
         */
-        if (output_len - AES_BLOCK_LENGTH_BYTES as i64) < input_len || output_len < 16{
+        if (output_len - AES_BLOCK_LENGTH_BYTES as i64) < input_len {
             output.resize(input_len as usize + AES_BLOCK_LENGTH_BYTES, 0);
         }
 
@@ -602,7 +602,7 @@ impl AESContext {
            Casting these just in case it goes negative on the subtraction operation, don't want wraparound or panic because of this
         */
         let input_len: i64 = buffer.len() as i64;
-        let output_len: i64 = output.capacity() as i64;
+        let output_len: i64 = output.len() as i64;
 
         /*
            We need to treat encryption and decryption different.
@@ -735,16 +735,13 @@ impl Encryption for AESContext {
     }
 
     fn encrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
-        let input_cap = input.len();
-        /*
-           Ensure input is block size aligned
-        */
-        if input_cap % AES_BLOCK_LENGTH_BYTES != 0 {
-            let diff = (input_cap + AES_BLOCK_LENGTH_BYTES) % AES_BLOCK_LENGTH_BYTES;
-            for _ in 0..(AES_BLOCK_LENGTH_BYTES - diff) {
-                input.push(0);
-            }
+        let len = input.len();
+        let padding_len = AES_BLOCK_LENGTH_BYTES - (len % AES_BLOCK_LENGTH_BYTES);
+
+        for _ in 0..padding_len {
+            input.push(padding_len as u8);
         }
+
         match self.mode {
             AesMode::CBC => {
                 self.cbc_encrypt(input, output);
@@ -776,7 +773,17 @@ impl Encryption for AESContext {
                 self.ctr_decrypt(input, output);
             }
         }
+
+        let len = output.len();
+
+        if let Some(&last_byte) = input.last() {
+            let pad_len = last_byte as usize;
+            if pad_len <= AES_BLOCK_LENGTH_BYTES && input[len - pad_len..].iter().all(|&b| b == last_byte) {
+                input.truncate(len - pad_len);
+            }
+        }
     }
+
 
     fn set_key(&mut self, key: &[u8]) {
         for (index, byte) in key.iter().enumerate() {
