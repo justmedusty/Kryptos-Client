@@ -120,4 +120,8 @@ impl Encryption for Rc4State {
             Err(_) => self.key.key,
         };
     }
+
+    fn get_key(&self) -> &[u8] {
+        &self.key.key
+    }
 }

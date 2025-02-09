@@ -133,6 +133,7 @@ fn client_read_routine(tcp_stream: LockedStream, encryption_context: Arc<Mutex<E
                 exit(ERROR);
             }
             Ok(_n) => {
+                println!("READ {_n} BYTES!");
                 let mut decrypted_buffer = buffer.clone();
 
                 let mut encryption_context_stream = match encryption_context.lock() {

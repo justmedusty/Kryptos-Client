@@ -10,6 +10,7 @@ pub trait Encryption {
     fn encrypt(&mut self, input:  &mut Vec<u8>, output : &mut Vec<u8>);
     fn decrypt(&mut self, input:  &mut Vec<u8>, output: &mut Vec<u8>);
     fn set_key(&mut self, key: &[u8]);
+    fn get_key(&self) -> &[u8];
 }
 
 /*

@@ -428,7 +428,10 @@ impl AESContext {
         self.add_round_key(num_rounds, &mut state);
 
         let result = from_2d_array(&state);
-        output.copy_from_slice(&result);
+
+        for i in 0..AES_BLOCK_LENGTH_BYTES {
+            output[i] = result[i];
+        }
     }
 
     fn inverted_cipher(&mut self, buffer: &[u8], output: &mut [u8]) {
@@ -754,22 +757,32 @@ impl Encryption for AESContext {
     }
 
     fn encrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
-        let ctr: bool = self.mode == AesMode::CTR;
-        if (!ctr) {
-            let len = input.len();
-            let padding_len = AES_BLOCK_LENGTH_BYTES - (len % AES_BLOCK_LENGTH_BYTES);
-
+        let mut len = input.len();
+        let padding_len = (AES_BLOCK_LENGTH_BYTES - (len % AES_BLOCK_LENGTH_BYTES));
+        if (padding_len < AES_BLOCK_LENGTH_BYTES) {
             for _ in 0..padding_len {
                 input.push(padding_len as u8);
             }
+        }
+
+        if (output.len() < input.len()) {
+            output.resize(input.len(), 0);
         }
         match self.mode {
             AesMode::CBC => {
                 self.cbc_encrypt(input, output);
             }
             AesMode::ECB => {
-                self.ecb_encrypt(input, output);
+                for i in 0..input.len() / AES_BLOCK_LENGTH_BYTES {
+                    self.ecb_encrypt(
+                        &input[i * AES_BLOCK_LENGTH_BYTES
+                            ..(i * AES_BLOCK_LENGTH_BYTES) + AES_BLOCK_LENGTH_BYTES],
+                        &mut output[i * AES_BLOCK_LENGTH_BYTES
+                            ..(i * AES_BLOCK_LENGTH_BYTES) + AES_BLOCK_LENGTH_BYTES],
+                    );
+                }
             }
+
             AesMode::CTR => {
                 self.ctr_encrypt(input, output);
             }
@@ -777,34 +790,49 @@ impl Encryption for AESContext {
     }
 
     fn decrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
-        let ctr: bool = self.mode == AesMode::CTR;
         let input_size = input.len();
         let output_size = output.len();
 
-        if input_size > output_size {
-            output.resize(input_size - AES_BLOCK_LENGTH_BYTES, 0); // Shave off the IV from the input length
+        if (input_size > output_size) {
+            output.resize(input_size - AES_BLOCK_LENGTH_BYTES, 0); // Shave off the IV
         }
+
         match self.mode {
             AesMode::CBC => {
                 self.cbc_decrypt(input, output);
             }
             AesMode::ECB => {
-                self.ecb_decrypt(input, output);
+                for i in 0..input.len() / AES_BLOCK_LENGTH_BYTES {
+                    self.ecb_decrypt(
+                        &mut input[i * AES_BLOCK_LENGTH_BYTES
+                            ..(i * AES_BLOCK_LENGTH_BYTES) + AES_BLOCK_LENGTH_BYTES],
+                        &mut output[i * AES_BLOCK_LENGTH_BYTES
+                            ..(i * AES_BLOCK_LENGTH_BYTES) + AES_BLOCK_LENGTH_BYTES],
+                    );
+                }
             }
             AesMode::CTR => {
                 self.ctr_decrypt(input, output);
             }
         }
-        if (ctr == false) {
-            if let Some(&last_byte) = output.last() {
-                let pad_len = last_byte as usize;
-                if pad_len > 0 && pad_len <= AES_BLOCK_LENGTH_BYTES && output.len() >= pad_len {
-                    let padding_valid = output[output.len() - pad_len..]
-                        .iter()
-                        .all(|&b| b == last_byte);
-                    if padding_valid {
-                        output.truncate(output.len() - pad_len);
-                    }
+
+        let mut len = output.len();
+        for i in 0..len {
+            if (output[i] == 0) {
+                len = i;
+                println!("LEN {len}");
+                output.resize(len, 0);
+                break;
+            }
+        }
+        if let Some(&last_byte) = output.last() {
+            let pad_len = last_byte as usize;
+            if pad_len > 0 && pad_len <= AES_BLOCK_LENGTH_BYTES && output.len() >= pad_len {
+                let padding_valid = output[output.len() - pad_len..]
+                    .iter()
+                    .all(|&b| b == last_byte);
+                if padding_valid {
+                    output.resize(output.len() - pad_len, 0);
                 }
             }
         }
@@ -815,5 +843,9 @@ impl Encryption for AESContext {
             self.key[index] = *byte;
         }
         self.key_expansion();
+    }
+
+    fn get_key(&self) -> &[u8] {
+        &self.key
     }
 }
