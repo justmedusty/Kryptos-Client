@@ -197,8 +197,7 @@ fn client_input_routine(stream: LockedStream, rc4: Arc<Mutex<EncryptionContext>>
         if line.is_empty() {
             continue;
         }
-        let mut encrypted_buffer = vec![0; 4096];
-        encrypted_buffer.truncate(line.len());
+        let mut encrypted_buffer = vec![0; line.len()];
 
         let mut rc4_unlocked = rc4.lock().unwrap();
         rc4_unlocked

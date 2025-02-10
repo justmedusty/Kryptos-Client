@@ -820,7 +820,6 @@ impl Encryption for AESContext {
         for i in 0..len {
             if (output[i] == 0) {
                 len = i;
-                println!("LEN {len}");
                 output.resize(len, 0);
                 break;
             }
