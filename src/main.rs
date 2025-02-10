@@ -107,7 +107,10 @@ fn main() {
         client_input_routine(read_reference, encryption_context);
     }
 }
-fn client_read_routine(tcp_stream: LockedStream, encryption_context: Arc<Mutex<EncryptionContext>>) {
+fn client_read_routine(
+    tcp_stream: LockedStream,
+    encryption_context: Arc<Mutex<EncryptionContext>>,
+) {
     loop {
         let mut buffer = vec![0; 1024];
         sleep(Duration::from_millis(25));
@@ -133,9 +136,7 @@ fn client_read_routine(tcp_stream: LockedStream, encryption_context: Arc<Mutex<E
                 exit(ERROR);
             }
             Ok(_n) => {
-                println!("READ {_n} BYTES!");
                 let mut decrypted_buffer = buffer.clone();
-
                 let mut encryption_context_stream = match encryption_context.lock() {
                     Ok(x) => x,
                     Err(_) => continue,
@@ -145,24 +146,19 @@ fn client_read_routine(tcp_stream: LockedStream, encryption_context: Arc<Mutex<E
                    Drop the rc4 stream after decrypting so that the other thread can acquire the lock when it needs
                    to
                 */
+                buffer.resize(_n, 0);
+                decrypted_buffer.resize(_n, 0);
                 encryption_context_stream
                     .context
                     .decrypt(&mut buffer, &mut decrypted_buffer);
                 drop(encryption_context_stream);
 
-                //Resize the buffer so that we don't print any junk in the rest of the buffer
-                decrypted_buffer.resize(_n, 0);
-
-                let data = String::from_utf8_lossy(&decrypted_buffer);
-
                 /*
                    Print the data that we read on the socket and 0 the buffer up until the point we just read to
                    We do this to avoid iterating the entire buffer every time
                 */
-                print!("{}", data);
-
-                for mut byte in buffer[.._n].iter_mut() {
-                    *byte = 0;
+                for byte in &decrypted_buffer {
+                    print!("{}", *byte as char);
                 }
             }
             //Since we require non blocking reads due to the lock scheme, just continue the loop, dropping the lock
@@ -197,7 +193,7 @@ fn client_input_routine(stream: LockedStream, rc4: Arc<Mutex<EncryptionContext>>
         if line.is_empty() {
             continue;
         }
-        let mut encrypted_buffer = vec![0; line.len()];
+        let mut encrypted_buffer = vec![0; line.len() * 2];
 
         let mut rc4_unlocked = rc4.lock().unwrap();
         rc4_unlocked
@@ -215,7 +211,7 @@ fn client_input_routine(stream: LockedStream, rc4: Arc<Mutex<EncryptionContext>>
 
         encrypted_buffer.resize(line.len(), 0);
 
-        match stream.write_all(encrypted_buffer.as_slice()) {
+        match stream.write(encrypted_buffer.as_slice()) {
             Ok(x) => x,
             Err(_) => {
                 println!("Failed to write line to stream");

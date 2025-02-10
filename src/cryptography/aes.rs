@@ -793,10 +793,11 @@ impl Encryption for AESContext {
         let input_size = input.len();
         let output_size = output.len();
 
-        if (input_size > output_size) {
+        if (self.mode != AesMode::ECB) {
             output.resize(input_size - AES_BLOCK_LENGTH_BYTES, 0); // Shave off the IV
+        } else {
+            output.resize(input_size, 0);
         }
-
         match self.mode {
             AesMode::CBC => {
                 self.cbc_decrypt(input, output);
@@ -815,10 +816,9 @@ impl Encryption for AESContext {
                 self.ctr_decrypt(input, output);
             }
         }
-
         let mut len = output.len();
-        for i in 0..len {
-            if (output[i] == 0) {
+        for i in 0..len - 1 {
+            if (output[i] == 0) && output[i + 1] == 0 {
                 len = i;
                 output.resize(len, 0);
                 break;
