@@ -160,6 +160,7 @@ fn client_read_routine(
                 for byte in &decrypted_buffer {
                     print!("{}", *byte as char);
                 }
+                println!()
             }
             //Since we require non blocking reads due to the lock scheme, just continue the loop, dropping the lock
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => continue,
@@ -193,7 +194,7 @@ fn client_input_routine(stream: LockedStream, rc4: Arc<Mutex<EncryptionContext>>
         if line.is_empty() {
             continue;
         }
-        let mut encrypted_buffer = vec![0; line.len() * 2];
+        let mut encrypted_buffer = vec![0; line.len()];
 
         let mut rc4_unlocked = rc4.lock().unwrap();
         rc4_unlocked
@@ -208,9 +209,6 @@ fn client_input_routine(stream: LockedStream, rc4: Arc<Mutex<EncryptionContext>>
                 exit(ERROR);
             }
         };
-
-        encrypted_buffer.resize(line.len(), 0);
-
         match stream.write(encrypted_buffer.as_slice()) {
             Ok(x) => x,
             Err(_) => {

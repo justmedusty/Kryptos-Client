@@ -758,6 +758,11 @@ impl Encryption for AESContext {
 
     fn encrypt(&mut self, input: &mut Vec<u8>, output: &mut Vec<u8>) {
         let mut len = input.len();
+        let output_len = output.len();
+
+        if (self.mode != AesMode::ECB) {
+            output.resize(len + AES_BLOCK_LENGTH_BYTES, 0);
+        }
         let padding_len = (AES_BLOCK_LENGTH_BYTES - (len % AES_BLOCK_LENGTH_BYTES));
         if (padding_len < AES_BLOCK_LENGTH_BYTES) {
             for _ in 0..padding_len {
